@@ -9,6 +9,7 @@ let state = "INTRO";
 let currentTheme = "FARM";
 let customDifficulty = 5;
 let customTankerHp = 3;
+let customMovingLives = 3;
 let timeLeft = 0,
   timeElapsed = 0,
   kills = 0,
@@ -423,6 +424,7 @@ const START_MODE_LABELS = {
   RANKING: "무한 생존",
   MOVING: "액션 생존",
 };
+const DEFAULT_TOUCH_MODE_LIVES = 3;
 
 // ==========================================
 // 3. 엔진 코어 함수 (렌더링 & 오디오)
@@ -704,14 +706,16 @@ const Greeny = {
     }
 
     // --- 체력 하트를 픽셀 스프라이트로 렌더링 ---
-    const heartSize = 4;
-    const heartGap = 8;
-    const heartStride = sprHeart.full[0].length * heartSize + heartGap;
-    const heartY = -72;
-    for (let i = 0; i < this.maxHp; i++) {
-      const hx = (i - (this.maxHp - 1) / 2) * heartStride;
-      const sprite = i < this.hp ? sprHeart.full : sprHeart.empty;
-      drawPixelArtAt(ctx, sprite, heartSize, hx, heartY);
+    if (state === "PLAYING" && this.maxHp > 1) {
+      const heartSize = 4;
+      const heartGap = 8;
+      const heartStride = sprHeart.full[0].length * heartSize + heartGap;
+      const heartY = -72;
+      for (let i = 0; i < this.maxHp; i++) {
+        const hx = (i - (this.maxHp - 1) / 2) * heartStride;
+        const sprite = i < this.hp ? sprHeart.full : sprHeart.empty;
+        drawPixelArtAt(ctx, sprite, heartSize, hx, heartY);
+      }
     }
     // -------------------------------------------
 
@@ -896,6 +900,10 @@ function startConfiguredMode() {
   startGame(configuredStartMode);
 }
 
+function getGreenyLivesForMode(mode) {
+  return mode === "MOVING" ? customMovingLives : DEFAULT_TOUCH_MODE_LIVES;
+}
+
 // ==========================================
 // 5. 게임 흐름 컨트롤
 // ==========================================
@@ -1010,6 +1018,7 @@ function startGame(mode) {
   hideStorySynopsis();
   state = "PLAYING";
   gameMode = mode;
+  Greeny.maxHp = getGreenyLivesForMode(mode);
   timeElapsed = 0;
   kills = 0;
   spawnTimer = 0;
@@ -1243,6 +1252,14 @@ window.onload = () => {
     cycleConfiguredStartMode(-1);
   document.getElementById("btn-start-mode-next").onclick = () =>
     cycleConfiguredStartMode(1);
+  document.getElementById("btn-moving-life-plus").onclick = () => {
+    if (customMovingLives < 9) customMovingLives++;
+    document.getElementById("val-moving-life").innerText = customMovingLives;
+  };
+  document.getElementById("btn-moving-life-minus").onclick = () => {
+    if (customMovingLives > 1) customMovingLives--;
+    document.getElementById("val-moving-life").innerText = customMovingLives;
+  };
   document.getElementById("btn-hp-plus").onclick = () => {
     if (customTankerHp < 20) customTankerHp++;
     document.getElementById("val-tanker-hp").innerText = customTankerHp;
