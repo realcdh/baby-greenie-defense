@@ -5,11 +5,13 @@ let canvas, ctx, bgCanvas, bgCtx;
 let actx = null;
 let isMuted = false;
 let isConsoleMode = false;
+let showLeaderboard = true;
 let state = "INTRO";
 let currentTheme = "FARM";
 let customDifficulty = 5;
+let customMonsterSpeed = 1.0;
 let customTankerHp = 3;
-let customMovingLives = 3;
+let customMovingLives = 1;
 let customActionBombInterval = 3.0;
 let customActionBombDamage = 1.5;
 let customActionBombRadius = 150;
@@ -21,7 +23,7 @@ let timeLeft = 0,
   screenShake = 0;
 let gameMode = "STORY",
   currentStage = 1;
-let configuredStartMode = "STORY";
+let configuredStartMode = "MOVING";
 let actionBombCount = 0,
   actionBombCharge = 0,
   actionBombShockwave = 0;
@@ -33,7 +35,15 @@ let currentStorySequence = [],
   currentStoryIndex = 0;
 let storyOverlayHideTimer = null;
 let draftSettings = null;
+let currentUser = null;
+let authModalLocked = false;
+let pendingPostAuthAction = null;
+let leaderboardRequestId = 0;
 const keys = {};
+const API_BASE_URL =
+  "https://7y8yhdx6vf.execute-api.ap-northeast-2.amazonaws.com/";
+const API_KEY = "tempgreedy";
+const LEADERBOARD_GAME_NAME = "protect-baby-green";
 
 // ==========================================
 // 2. 에셋 및 데이터
@@ -231,6 +241,53 @@ const sprBomb = [
   [0, 35, 41, 41, 41, 42, 41, 35, 0],
   [0, 0, 35, 35, 35, 35, 35, 0, 0],
 ];
+
+const sprSettingsGear = [
+  [0, 0, 0, 35, 35, 35, 0, 0, 0],
+  [0, 0, 35, 42, 41, 42, 35, 0, 0],
+  [0, 35, 42, 41, 17, 41, 42, 35, 0],
+  [35, 42, 41, 17, 41, 17, 41, 42, 35],
+  [35, 41, 17, 41, 49, 41, 17, 41, 35],
+  [35, 42, 41, 17, 41, 17, 41, 42, 35],
+  [0, 35, 42, 41, 17, 41, 42, 35, 0],
+  [0, 0, 35, 42, 41, 42, 35, 0, 0],
+  [0, 0, 0, 35, 35, 35, 0, 0, 0],
+];
+
+const sprCursorSwatter = {
+  FARM: [
+    [0, 0, 35, 35, 35, 35, 35, 0, 0, 0, 0, 0, 0, 0],
+    [0, 35, 31, 31, 1, 31, 31, 35, 0, 0, 0, 0, 0, 0],
+    [35, 31, 1, 0, 1, 0, 1, 31, 35, 0, 0, 0, 0, 0],
+    [35, 31, 0, 1, 0, 1, 0, 31, 35, 0, 0, 0, 0, 0],
+    [35, 31, 1, 0, 1, 0, 1, 31, 35, 0, 0, 0, 0, 0],
+    [0, 35, 31, 31, 1, 31, 31, 35, 40, 35, 0, 0, 0, 0],
+    [0, 0, 35, 35, 35, 35, 35, 42, 40, 42, 35, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 35, 40, 42, 40, 42, 35, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 35, 40, 42, 40, 42, 35, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 35, 40, 42, 40, 42, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 40, 42, 40, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 40, 42, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 40, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 0],
+  ],
+  ZOMBIE: [
+    [0, 0, 35, 35, 35, 35, 35, 0, 0, 0, 0, 0, 0, 0],
+    [0, 35, 44, 44, 45, 44, 44, 35, 0, 0, 0, 0, 0, 0],
+    [35, 44, 41, 0, 45, 0, 41, 44, 35, 0, 0, 0, 0, 0],
+    [35, 44, 0, 45, 0, 45, 0, 44, 35, 0, 0, 0, 0, 0],
+    [35, 44, 41, 0, 45, 0, 41, 44, 35, 0, 0, 0, 0, 0],
+    [0, 35, 44, 44, 45, 44, 44, 35, 41, 35, 0, 0, 0, 0],
+    [0, 0, 35, 35, 35, 35, 35, 44, 41, 44, 35, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 35, 41, 44, 41, 44, 35, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 35, 41, 44, 41, 44, 35, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 35, 41, 44, 41, 44, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 41, 44, 41, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 41, 44, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 41, 35],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 0],
+  ],
+};
 
 const sprBug = [
   [
@@ -445,6 +502,67 @@ const START_MODE_LABELS = {
 };
 const DEFAULT_TOUCH_MODE_LIVES = 3;
 const ACTION_BOMB_BLAST_DURATION = 0.35;
+const SETTINGS_FIELD_CONFIG = {
+  customMovingLives: {
+    inputId: "val-moving-life",
+    min: 1,
+    max: 9,
+    integer: true,
+    precision: 0,
+    delta: 1,
+  },
+  customActionBombInterval: {
+    inputId: "val-bomb-interval",
+    min: 0.5,
+    max: 10,
+    integer: false,
+    precision: 2,
+    delta: 0.5,
+  },
+  customActionBombDamage: {
+    inputId: "val-bomb-damage",
+    min: 0.5,
+    max: 10,
+    integer: false,
+    precision: 2,
+    delta: 0.5,
+  },
+  customActionBombRadius: {
+    inputId: "val-bomb-range",
+    min: 60,
+    max: 320,
+    integer: false,
+    precision: 2,
+    delta: 10,
+  },
+  customTankerHp: {
+    inputId: "val-tanker-hp",
+    min: 1,
+    max: 20,
+    integer: false,
+    precision: 2,
+    delta: 1,
+  },
+  customDifficulty: {
+    inputId: "val-difficulty",
+    min: 1,
+    max: 10,
+    integer: false,
+    precision: 2,
+    delta: 1,
+  },
+  customMonsterSpeed: {
+    inputId: "val-monster-speed",
+    min: 0.5,
+    max: 3,
+    integer: false,
+    precision: 2,
+    delta: 0.1,
+  },
+};
+const CURSOR_PIXEL_SCALE = 3;
+const CURSOR_HOTSPOT = { x: 4, y: 3 };
+const CURSOR_STYLE_CACHE = {};
 
 // ==========================================
 // 3. 엔진 코어 함수 (렌더링 & 오디오)
@@ -629,6 +747,20 @@ function drawPixelArtAt(ctx, sprite, size, x, y) {
   ctx.restore();
 }
 
+function drawPixelArtTopLeft(ctx, sprite, size, offsetX = 0, offsetY = 0) {
+  if (!sprite) return;
+
+  for (let r = 0; r < sprite.length; r++) {
+    for (let c = 0; c < sprite[r].length; c++) {
+      const code = sprite[r][c];
+      if (!colorMap[code]) continue;
+
+      ctx.fillStyle = colorMap[code];
+      ctx.fillRect(offsetX + c * size, offsetY + r * size, size, size);
+    }
+  }
+}
+
 function drawEnemyHealthBar(ctx, currentHp, maxHp, width, y) {
   const barWidth = Math.floor(width);
   const barHeight = 7;
@@ -794,7 +926,10 @@ class Bug {
         : isTanker
           ? sprTanker
           : sprBug;
-    this.speed = (isTanker ? 50 : 100) * (1 + customDifficulty * 0.1);
+    this.speed =
+      (isTanker ? 50 : 100) *
+      (1 + customDifficulty * 0.1) *
+      customMonsterSpeed;
   }
   update(dt) {
     const dx = Greeny.x - this.x,
@@ -903,6 +1038,45 @@ function renderBombHudIcon() {
   iconCtx.restore();
 }
 
+function renderSettingsFabIcon() {
+  const iconCanvas = document.getElementById("settings-fab-icon");
+  if (!iconCanvas) return;
+
+  const iconCtx = iconCanvas.getContext("2d");
+  iconCtx.imageSmoothingEnabled = false;
+  iconCtx.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
+  iconCtx.save();
+  iconCtx.translate(iconCanvas.width / 2, iconCanvas.height / 2);
+  drawPixelArt(iconCtx, sprSettingsGear, 4);
+  iconCtx.restore();
+}
+
+function getCursorStyleForTheme(theme) {
+  if (CURSOR_STYLE_CACHE[theme]) return CURSOR_STYLE_CACHE[theme];
+
+  const sprite = sprCursorSwatter[theme] || sprCursorSwatter.FARM;
+  const cursorCanvas = document.createElement("canvas");
+  cursorCanvas.width = sprite[0].length * CURSOR_PIXEL_SCALE;
+  cursorCanvas.height = sprite.length * CURSOR_PIXEL_SCALE;
+
+  const cursorCtx = cursorCanvas.getContext("2d");
+  cursorCtx.imageSmoothingEnabled = false;
+  drawPixelArtTopLeft(cursorCtx, sprite, CURSOR_PIXEL_SCALE);
+
+  CURSOR_STYLE_CACHE[theme] = `url("${cursorCanvas.toDataURL("image/png")}") ${
+    CURSOR_HOTSPOT.x * CURSOR_PIXEL_SCALE
+  } ${CURSOR_HOTSPOT.y * CURSOR_PIXEL_SCALE}, auto`;
+  return CURSOR_STYLE_CACHE[theme];
+}
+
+function updateCursorPresentation() {
+  document.body.classList.add("custom-cursor");
+  document.body.style.setProperty(
+    "--game-cursor",
+    getCursorStyleForTheme(currentTheme),
+  );
+}
+
 function createBombBurst(x, y) {
   const colors =
     currentTheme === "ZOMBIE"
@@ -922,12 +1096,434 @@ function createBombBurst(x, y) {
   }
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeSettingNumber(settingKey, rawValue, fallbackValue) {
+  const config = SETTINGS_FIELD_CONFIG[settingKey];
+  const parsedValue = Number.parseFloat(
+    String(rawValue ?? "")
+      .trim()
+      .replace(",", "."),
+  );
+
+  if (!Number.isFinite(parsedValue)) return fallbackValue;
+
+  const clampedValue = clampNumber(parsedValue, config.min, config.max);
+  if (config.integer) return Math.round(clampedValue);
+  return Number(clampedValue.toFixed(config.precision));
+}
+
+function formatSettingInputValue(settingKey, value) {
+  const config = SETTINGS_FIELD_CONFIG[settingKey];
+  const normalizedValue = normalizeSettingNumber(settingKey, value, config.min);
+
+  if (config.integer) return String(normalizedValue);
+  return String(Number(normalizedValue.toFixed(config.precision)));
+}
+
+function normalizePhone(value) {
+  return String(value || "").trim();
+}
+
+function normalizeUserId(value) {
+  return String(value || "").trim().slice(0, 4);
+}
+
+function normalizeTextValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeFetchedUserProfile(profile, fallbackUserId = "") {
+  const source =
+    profile?.user ?? profile?.profile ?? profile?.data ?? profile?.result ?? profile;
+  if (!source || typeof source !== "object") return null;
+
+  const userId = normalizeUserId(source.userId ?? source.id ?? fallbackUserId);
+  if (userId.length !== 4) return null;
+
+  return {
+    userId,
+    displayName: normalizeTextValue(
+      source.nickname ?? source.name ?? source.userName ?? source.username,
+    ),
+    phone: normalizePhone(source.phone),
+  };
+}
+
+function formatScoreValue(score) {
+  const numericScore = Number(score) || 0;
+  const maximumFractionDigits = Number.isInteger(numericScore) ? 0 : 1;
+  return numericScore.toLocaleString("ko-KR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  });
+}
+
+function getRunScore() {
+  return kills * 100;
+}
+
+function setStatusMessage(elementId, message, tone = "neutral") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  el.textContent = message || "";
+  el.classList.toggle("hidden", !message);
+
+  const toneColorMap = {
+    error: "#b91c1c",
+    success: "#15803d",
+    info: "#1d4ed8",
+    neutral:
+      elementId === "result-submit-status-lose"
+        ? "#7f1d1d"
+        : elementId === "result-submit-status-win"
+          ? "#166534"
+          : "#713f12",
+  };
+
+  el.style.color = toneColorMap[tone] || toneColorMap.neutral;
+}
+
+function renderCurrentUser() {
+  const nameEl = document.getElementById("intro-user-name");
+  const idEl = document.getElementById("intro-user-id");
+  const buttonEl = document.getElementById("btn-open-auth");
+  if (!nameEl || !idEl || !buttonEl) return;
+
+  if (currentUser?.userId) {
+    nameEl.innerText = currentUser.displayName || `${currentUser.userId}번 플레이어`;
+    const details = [`userId: ${currentUser.userId}`];
+    if (currentUser.phone) details.push(`전화번호: ${currentUser.phone}`);
+    idEl.innerText = details.join(" · ");
+    buttonEl.innerText = "다시 조회";
+  } else {
+    nameEl.innerText = "조회된 플레이어 없음";
+    idEl.innerText = "시작 전에 userId 4자리를 입력해주세요.";
+    buttonEl.innerText = "조회";
+  }
+}
+
+function fillAuthForm() {
+  document.getElementById("auth-user-id").value = currentUser?.userId || "";
+}
+
+function setAuthFormDisabled(disabled) {
+  authModalLocked = disabled;
+  [
+    "auth-user-id",
+    "btn-submit-auth",
+    "btn-cancel-auth",
+    "btn-close-auth",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+}
+
+function showAuthModal() {
+  fillAuthForm();
+  setStatusMessage("auth-status", "", "neutral");
+  document.getElementById("ui-auth-modal").classList.remove("hidden");
+  document.getElementById("auth-user-id").focus();
+}
+
+function openAuthModal() {
+  pendingPostAuthAction = null;
+  showAuthModal();
+}
+
+function openAuthModalForAction(action) {
+  pendingPostAuthAction = typeof action === "function" ? action : null;
+  showAuthModal();
+}
+
+function closeAuthModal(resetPendingStart = false) {
+  document.getElementById("ui-auth-modal").classList.add("hidden");
+  setAuthFormDisabled(false);
+  if (resetPendingStart) pendingPostAuthAction = null;
+}
+
+function cancelAuthFlow() {
+  closeAuthModal(true);
+}
+
+function runWithAuthenticatedPlayer(action) {
+  if (currentUser?.userId) {
+    action();
+    return;
+  }
+
+  openAuthModalForAction(action);
+}
+
+async function requestJson(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const rawText = await response.text();
+
+  let data = null;
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (error) {
+      data = rawText;
+    }
+  }
+
+  if (!response.ok) {
+    const errorMessage =
+      typeof data === "string"
+        ? data
+        : data?.message || `요청 실패 (${response.status})`;
+    throw new Error(errorMessage);
+  }
+
+  return data;
+}
+
+async function fetchUserProfileById(userId) {
+  const lookupAttempts = [
+    () =>
+      requestJson("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          userId,
+          apiKey: API_KEY,
+        }),
+      }),
+    () =>
+      requestJson(
+        `/api/users/${encodeURIComponent(userId)}?apiKey=${encodeURIComponent(API_KEY)}`,
+        {
+          method: "GET",
+        },
+      ),
+    () =>
+      requestJson(
+        `/api/users?userId=${encodeURIComponent(userId)}&apiKey=${encodeURIComponent(API_KEY)}`,
+        {
+          method: "GET",
+        },
+      ),
+  ];
+
+  let lastError = null;
+  for (const attempt of lookupAttempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!lastError) lastError = error;
+    }
+  }
+
+  throw lastError || new Error("유저 정보를 불러오지 못했습니다.");
+}
+
+function renderLeaderboard(rankings = []) {
+  const listEl = document.getElementById("leaderboard-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+
+  if (rankings.length === 0) {
+    const emptyItem = document.createElement("li");
+    emptyItem.className =
+      "rounded-lg border border-orange-200 bg-white/40 px-3 py-3 text-[11px] text-yellow-900/80";
+    emptyItem.innerText = "아직 등록된 점수가 없습니다.";
+    listEl.appendChild(emptyItem);
+    return;
+  }
+
+  rankings.forEach((entry) => {
+    const item = document.createElement("li");
+    item.className =
+      "flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-white/50 px-3 py-2";
+
+    const left = document.createElement("div");
+    left.className = "flex items-center gap-3 min-w-0";
+
+    const rank = document.createElement("span");
+    rank.className = "text-sm font-bold text-orange-700 shrink-0";
+    rank.innerText = `#${entry.rank}`;
+
+    const nickname = document.createElement("span");
+    nickname.className = "truncate font-bold text-orange-900";
+    nickname.innerText = entry.nickname || "익명";
+
+    const score = document.createElement("span");
+    score.className = "shrink-0 font-bold text-green-700";
+    score.innerText = `${formatScoreValue(entry.score)}점`;
+
+    left.append(rank, nickname);
+    item.append(left, score);
+    listEl.appendChild(item);
+  });
+}
+
+function renderLeaderboardNotice(message) {
+  const listEl = document.getElementById("leaderboard-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  const item = document.createElement("li");
+  item.className =
+    "rounded-lg border border-orange-200 bg-white/40 px-3 py-3 text-[11px] text-yellow-900/80";
+  item.innerText = message;
+  listEl.appendChild(item);
+}
+
+function updateLeaderboardVisibility() {
+  const box = document.getElementById("intro-leaderboard-box");
+  if (!box) return;
+  box.classList.toggle("hidden", !showLeaderboard);
+}
+
+async function fetchLeaderboard() {
+  if (!showLeaderboard) return;
+
+  const requestId = ++leaderboardRequestId;
+  setStatusMessage(
+    "leaderboard-status",
+    "리더보드를 불러오는 중입니다...",
+    "neutral",
+  );
+
+  try {
+    const data = await requestJson(`/api/leader-board/${LEADERBOARD_GAME_NAME}`, {
+      method: "GET",
+    });
+    if (requestId !== leaderboardRequestId) return;
+
+    const rankings = Array.isArray(data?.rankings) ? data.rankings : [];
+    renderLeaderboard(rankings);
+    setStatusMessage(
+      "leaderboard-status",
+      rankings.length > 0 ? "상위 기록 5개를 표시합니다." : "아직 등록된 점수가 없습니다.",
+      "neutral",
+    );
+  } catch (error) {
+    if (requestId !== leaderboardRequestId) return;
+
+    renderLeaderboardNotice("리더보드 정보를 가져오지 못했습니다.");
+    setStatusMessage(
+      "leaderboard-status",
+      `리더보드를 불러오지 못했습니다: ${error.message}`,
+      "error",
+    );
+  }
+}
+
+function setResultSubmitStatus(outcome, message, tone = "neutral") {
+  const elementId =
+    outcome === "lose" ? "result-submit-status-lose" : "result-submit-status-win";
+  setStatusMessage(elementId, message, tone);
+}
+
+async function submitGameResult(outcome) {
+  const score = getRunScore();
+  const scoreElId = outcome === "lose" ? "result-score-lose" : "result-score-win";
+  const scoreEl = document.getElementById(scoreElId);
+  if (scoreEl) scoreEl.innerText = formatScoreValue(score);
+  const submittingUser = currentUser ? { ...currentUser } : null;
+
+  if (!submittingUser?.userId) {
+    setResultSubmitStatus(
+      outcome,
+      "플레이어 정보가 없어 점수를 전송하지 못했습니다.",
+      "error",
+    );
+    return;
+  }
+
+  setResultSubmitStatus(outcome, "점수를 서버에 등록하는 중입니다...", "info");
+
+  try {
+    const data = await requestJson("/api/result", {
+      method: "POST",
+      body: JSON.stringify({
+        gameName: LEADERBOARD_GAME_NAME,
+        userId: submittingUser.userId,
+        score,
+        apiKey: API_KEY,
+      }),
+    });
+
+    const statusPrefix = data?.status ? `[${data.status}] ` : "";
+    setResultSubmitStatus(
+      outcome,
+      `${statusPrefix}${data?.message || "점수가 등록되었습니다."}`,
+      "success",
+    );
+    if (showLeaderboard) void fetchLeaderboard();
+  } catch (error) {
+    setResultSubmitStatus(
+      outcome,
+      `점수 등록 실패: ${error.message}`,
+      "error",
+    );
+  }
+}
+
+async function submitAuthForm() {
+  if (authModalLocked) return;
+
+  const userId = normalizeUserId(document.getElementById("auth-user-id").value);
+
+  if (userId.length !== 4) {
+    setStatusMessage(
+      "auth-status",
+      "userId는 4글자로 입력해주세요.",
+      "error",
+    );
+    return;
+  }
+
+  setAuthFormDisabled(true);
+  setStatusMessage("auth-status", "플레이어 정보를 조회하는 중입니다...", "info");
+
+  try {
+    const profile = normalizeFetchedUserProfile(
+      await fetchUserProfileById(userId),
+      userId,
+    );
+    if (!profile) throw new Error("유저 정보를 받지 못했습니다.");
+
+    currentUser = profile;
+    renderCurrentUser();
+
+    const postAuthAction = pendingPostAuthAction;
+    closeAuthModal(true);
+    if (typeof postAuthAction === "function") postAuthAction();
+  } catch (error) {
+    setStatusMessage(
+      "auth-status",
+      `플레이어 조회 실패: ${error.message}`,
+      "error",
+    );
+    setAuthFormDisabled(false);
+  }
+}
+
+function handleStartGameRequest() {
+  runWithAuthenticatedPlayer(startConfiguredMode);
+}
+
 function getCurrentSettingsSnapshot() {
   return {
     currentTheme,
     isMuted,
     isConsoleMode,
+    showLeaderboard,
     customDifficulty,
+    customMonsterSpeed,
     customTankerHp,
     customMovingLives,
     customActionBombInterval,
@@ -968,27 +1564,40 @@ function renderStartModeControl(settings) {
 }
 
 function updateIntroStartModeHint() {
-  document.getElementById("intro-start-mode-hint").innerText =
-    `현재 시작 모드: ${START_MODE_LABELS[configuredStartMode]}`;
+  const hintEl = document.getElementById("intro-start-mode-hint");
+  if (!hintEl) return;
+  hintEl.innerText = `현재 시작 모드: ${START_MODE_LABELS[configuredStartMode]}`;
+}
+
+function syncDraftSettingsFromForm() {
+  if (!draftSettings) return;
+
+  Object.keys(SETTINGS_FIELD_CONFIG).forEach((settingKey) => {
+    const { inputId } = SETTINGS_FIELD_CONFIG[settingKey];
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    draftSettings[settingKey] = normalizeSettingNumber(
+      settingKey,
+      input.value,
+      draftSettings[settingKey],
+    );
+  });
 }
 
 function renderSettingsModal(settings) {
   document.getElementById("theme-toggle").checked =
     settings.currentTheme === "ZOMBIE";
+  document.getElementById("leaderboard-toggle").checked = settings.showLeaderboard;
   document.getElementById("mute-toggle").checked = settings.isMuted;
   document.getElementById("console-toggle").checked = settings.isConsoleMode;
-  document.getElementById("val-moving-life").innerText =
-    settings.customMovingLives;
-  document.getElementById("val-bomb-interval").innerText =
-    `${formatActionStat(settings.customActionBombInterval)}초`;
-  document.getElementById("val-bomb-damage").innerText = formatActionStat(
-    settings.customActionBombDamage,
-  );
-  document.getElementById("val-bomb-range").innerText =
-    `${Math.round(settings.customActionBombRadius)}px`;
-  document.getElementById("val-tanker-hp").innerText = settings.customTankerHp;
-  document.getElementById("val-difficulty").innerText =
-    settings.customDifficulty;
+  Object.keys(SETTINGS_FIELD_CONFIG).forEach((settingKey) => {
+    const { inputId } = SETTINGS_FIELD_CONFIG[settingKey];
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    input.value = formatSettingInputValue(settingKey, settings[settingKey]);
+  });
   renderStartModeControl(settings);
 }
 
@@ -996,7 +1605,9 @@ function applySettingsSnapshot(settings) {
   currentTheme = settings.currentTheme;
   isMuted = settings.isMuted;
   isConsoleMode = settings.isConsoleMode;
+  showLeaderboard = settings.showLeaderboard;
   customDifficulty = settings.customDifficulty;
+  customMonsterSpeed = settings.customMonsterSpeed;
   customTankerHp = settings.customTankerHp;
   customMovingLives = settings.customMovingLives;
   customActionBombInterval = settings.customActionBombInterval;
@@ -1006,6 +1617,9 @@ function applySettingsSnapshot(settings) {
 
   createMap();
   updateThemePresentation();
+  updateCursorPresentation();
+  updateLeaderboardVisibility();
+  if (showLeaderboard) void fetchLeaderboard();
   updateIntroStartModeHint();
   updateActionBombHud();
 }
@@ -1022,6 +1636,7 @@ function closeSettingsModal() {
 
 function applySettingsChanges() {
   if (!draftSettings) return;
+  syncDraftSettingsFromForm();
   applySettingsSnapshot(syncConfiguredStartMode({ ...draftSettings }));
   draftSettings = null;
   closeSettingsModal();
@@ -1117,12 +1732,26 @@ function drawActionBombShockwave(ctx) {
 function cycleConfiguredStartMode(direction) {
   if (!draftSettings) return;
 
+  syncDraftSettingsFromForm();
   const availableModes = getAvailableStartModes(draftSettings);
   const currentIndex = availableModes.indexOf(draftSettings.configuredStartMode);
   const nextIndex =
     (currentIndex + direction + availableModes.length) % availableModes.length;
   draftSettings.configuredStartMode = availableModes[nextIndex];
   renderStartModeControl(draftSettings);
+}
+
+function adjustDraftSetting(settingKey, direction) {
+  if (!draftSettings) return;
+
+  syncDraftSettingsFromForm();
+  const config = SETTINGS_FIELD_CONFIG[settingKey];
+  draftSettings[settingKey] = normalizeSettingNumber(
+    settingKey,
+    draftSettings[settingKey] + config.delta * direction,
+    draftSettings[settingKey],
+  );
+  renderSettingsModal(draftSettings);
 }
 
 function startConfiguredMode() {
@@ -1200,6 +1829,8 @@ function hideTransientUi() {
   document.getElementById("ui-gameover").classList.add("hidden");
   document.getElementById("ui-win").classList.add("hidden");
   document.getElementById("ui-pause-modal").classList.add("hidden");
+  setResultSubmitStatus("lose", "", "neutral");
+  setResultSubmitStatus("win", "", "neutral");
 }
 
 function resetRunPresentation() {
@@ -1288,6 +1919,10 @@ function triggerGameOver() {
   document.getElementById("result-time-lose").innerText =
     timeElapsed.toFixed(1) + "초";
   document.getElementById("result-kills-lose").innerText = kills;
+  document.getElementById("result-score-lose").innerText = formatScoreValue(
+    getRunScore(),
+  );
+  void submitGameResult("lose");
   updateActionBombHud();
 }
 
@@ -1296,9 +1931,10 @@ function triggerWin() {
   playSound("win");
   document.getElementById("ui-hud").classList.add("hidden");
   document.getElementById("ui-win").classList.remove("hidden");
-  document.getElementById("result-score").innerText = (
-    kills * 100
-  ).toLocaleString();
+  document.getElementById("result-score-win").innerText = formatScoreValue(
+    getRunScore(),
+  );
+  void submitGameResult("win");
   updateActionBombHud();
 }
 
@@ -1505,6 +2141,21 @@ window.onload = () => {
   );
 
   document.getElementById("btn-settings-fab").onclick = openSettingsModal;
+  document.getElementById("btn-open-auth").onclick = openAuthModal;
+  document.getElementById("btn-refresh-leaderboard").onclick = () =>
+    void fetchLeaderboard();
+  document.getElementById("btn-close-auth").onclick = cancelAuthFlow;
+  document.getElementById("btn-cancel-auth").onclick = cancelAuthFlow;
+  document.getElementById("btn-submit-auth").onclick = () => void submitAuthForm();
+  document.getElementById("auth-user-id").addEventListener("input", (e) => {
+    e.target.value = normalizeUserId(e.target.value);
+  });
+  document.getElementById("auth-user-id").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void submitAuthForm();
+    }
+  });
   document.getElementById("btn-close-settings").onclick = cancelSettingsChanges;
   document.getElementById("btn-cancel-settings").onclick =
     cancelSettingsChanges;
@@ -1513,99 +2164,76 @@ window.onload = () => {
     if (!draftSettings) return;
     draftSettings.currentTheme = e.target.checked ? "ZOMBIE" : "FARM";
   };
+  document.getElementById("leaderboard-toggle").onchange = (e) => {
+    if (!draftSettings) return;
+    draftSettings.showLeaderboard = e.target.checked;
+  };
   document.getElementById("mute-toggle").onchange = (e) => {
     if (!draftSettings) return;
     draftSettings.isMuted = e.target.checked;
   };
   document.getElementById("console-toggle").onchange = (e) => {
     if (!draftSettings) return;
+    syncDraftSettingsFromForm();
     draftSettings.isConsoleMode = e.target.checked;
     syncConfiguredStartMode(draftSettings);
     renderSettingsModal(draftSettings);
   };
+  Object.keys(SETTINGS_FIELD_CONFIG).forEach((settingKey) => {
+    const { inputId } = SETTINGS_FIELD_CONFIG[settingKey];
+    document.getElementById(inputId).addEventListener("change", () => {
+      if (!draftSettings) return;
+      syncDraftSettingsFromForm();
+      renderSettingsModal(draftSettings);
+    });
+  });
   document.getElementById("btn-start-mode-prev").onclick = () =>
     cycleConfiguredStartMode(-1);
   document.getElementById("btn-start-mode-next").onclick = () =>
     cycleConfiguredStartMode(1);
   document.getElementById("btn-moving-life-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customMovingLives < 9) draftSettings.customMovingLives++;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customMovingLives", 1);
   };
   document.getElementById("btn-moving-life-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customMovingLives > 1) draftSettings.customMovingLives--;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customMovingLives", -1);
   };
   document.getElementById("btn-bomb-interval-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombInterval < 10)
-      draftSettings.customActionBombInterval += 0.5;
-    draftSettings.customActionBombInterval = Number(
-      draftSettings.customActionBombInterval.toFixed(1),
-    );
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombInterval", 1);
   };
   document.getElementById("btn-bomb-interval-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombInterval > 1)
-      draftSettings.customActionBombInterval -= 0.5;
-    draftSettings.customActionBombInterval = Number(
-      draftSettings.customActionBombInterval.toFixed(1),
-    );
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombInterval", -1);
   };
   document.getElementById("btn-bomb-damage-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombDamage < 10)
-      draftSettings.customActionBombDamage += 0.5;
-    draftSettings.customActionBombDamage = Number(
-      draftSettings.customActionBombDamage.toFixed(1),
-    );
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombDamage", 1);
   };
   document.getElementById("btn-bomb-damage-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombDamage > 0.5)
-      draftSettings.customActionBombDamage -= 0.5;
-    draftSettings.customActionBombDamage = Number(
-      draftSettings.customActionBombDamage.toFixed(1),
-    );
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombDamage", -1);
   };
   document.getElementById("btn-bomb-range-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombRadius < 320)
-      draftSettings.customActionBombRadius += 10;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombRadius", 1);
   };
   document.getElementById("btn-bomb-range-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customActionBombRadius > 60)
-      draftSettings.customActionBombRadius -= 10;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customActionBombRadius", -1);
   };
   document.getElementById("btn-hp-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customTankerHp < 20) draftSettings.customTankerHp++;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customTankerHp", 1);
   };
   document.getElementById("btn-hp-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customTankerHp > 1) draftSettings.customTankerHp--;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customTankerHp", -1);
   };
   document.getElementById("btn-diff-plus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customDifficulty < 10) draftSettings.customDifficulty++;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customDifficulty", 1);
   };
   document.getElementById("btn-diff-minus").onclick = () => {
-    if (!draftSettings) return;
-    if (draftSettings.customDifficulty > 1) draftSettings.customDifficulty--;
-    renderSettingsModal(draftSettings);
+    adjustDraftSetting("customDifficulty", -1);
   };
-  document.getElementById("btn-start-game").onclick = startConfiguredMode;
+  document.getElementById("btn-monster-speed-plus").onclick = () => {
+    adjustDraftSetting("customMonsterSpeed", 1);
+  };
+  document.getElementById("btn-monster-speed-minus").onclick = () => {
+    adjustDraftSetting("customMonsterSpeed", -1);
+  };
+  document.getElementById("btn-start-game").onclick = handleStartGameRequest;
   document.getElementById("btn-start-stage").onclick = () => {
     currentStoryIndex++;
     if (currentStoryIndex < currentStorySequence.length) updateStoryDialog();
@@ -1616,12 +2244,14 @@ window.onload = () => {
   document.getElementById("btn-home-lose").onclick = goHome;
   document.getElementById("btn-home-win").onclick = goHome;
   document.getElementById("btn-restart-lose").onclick = () =>
-    startGame(gameMode);
+    runWithAuthenticatedPlayer(() => startGame(gameMode));
   document.getElementById("btn-restart-win").onclick = () => {
-    if (gameMode === "STORY" && currentStage < 3) {
-      currentStage++;
-      showStorySynopsis();
-    } else startGame(gameMode);
+    runWithAuthenticatedPlayer(() => {
+      if (gameMode === "STORY" && currentStage < 3) {
+        currentStage++;
+        showStorySynopsis();
+      } else startGame(gameMode);
+    });
   };
 
   const dpadIds = {
@@ -1647,9 +2277,15 @@ window.onload = () => {
   // 화면 및 캔버스 초기 설정
   resize();
   renderBombHudIcon();
+  renderSettingsFabIcon();
+  currentUser = null;
+  renderCurrentUser();
   updateThemePresentation();
+  updateCursorPresentation();
+  updateLeaderboardVisibility();
   updateIntroStartModeHint();
   renderSettingsModal(syncConfiguredStartMode(getCurrentSettingsSnapshot()));
   updateActionBombHud();
+  if (showLeaderboard) void fetchLeaderboard();
   requestAnimationFrame(gameLoop);
 };

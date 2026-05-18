@@ -14,6 +14,11 @@
         font-family: "DungGeunMo", monospace;
       }
 
+      body.custom-cursor,
+      body.custom-cursor * {
+        cursor: var(--game-cursor, auto) !important;
+      }
+
       canvas {
         display: block;
         image-rendering: -moz-crisp-edges;
@@ -102,6 +107,33 @@
         box-shadow:
           0 4px 0px #ca8a04,
           0 8px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .pixel-number-input {
+        width: 4.5rem;
+        height: 1.9rem;
+        padding: 0 0.35rem;
+        border: 2px solid #fdba74;
+        border-radius: 0.5rem;
+        background-color: #fff7ed;
+        color: #7c2d12;
+        font-family: inherit;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-align: center;
+        outline: none;
+        appearance: textfield;
+      }
+
+      .pixel-number-input:focus {
+        border-color: #fb923c;
+        box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+      }
+
+      .pixel-number-input::-webkit-outer-spin-button,
+      .pixel-number-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
       }
 
       #damageOverlay {
